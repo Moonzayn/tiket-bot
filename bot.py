@@ -128,6 +128,28 @@ def setup_session(context, config):
     mode = config.get("session_mode", "direct")
     if mode == "paste":
         session_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "session.json")
+
+        print("Paste session JSON (paste semua cookies dari Chrome DevTools, lalu Enter 2x):")
+        print("  Cara: DevTools > Application > Cookies > Copy cookies as JSON")
+        lines = []
+        while True:
+            line = input()
+            if not line:
+                break
+            lines.append(line)
+        raw = "\n".join(lines).strip()
+
+        if raw:
+            try:
+                cookies = json.loads(raw)
+                with open(session_path, "w", encoding="utf-8") as f:
+                    json.dump(cookies, f, indent=2)
+                context.add_cookies(cookies)
+                print(f"[OK] Session tersimpan & loaded ({len(cookies)} cookies)")
+                return
+            except Exception as e:
+                print(f"[ERROR] Gagal parse JSON: {e}")
+
         if os.path.exists(session_path):
             with open(session_path, encoding="utf-8") as f:
                 try:
@@ -137,7 +159,7 @@ def setup_session(context, config):
                 except Exception as e:
                     print(f"[ERROR] Gagal load session.json: {e}")
         else:
-            print("[!] session.json tidak ditemukan. Lanjut tanpa session.")
+            print("[!] Tidak ada session. Lanjut tanpa session.")
     else:
         print("[OK] Pakai Chrome session langsung.")
 
