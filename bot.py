@@ -124,44 +124,73 @@ def fill_contact_details(page, config):
     page.locator("#identity-card-number").fill(config["identityCardNumber"])
 
 
+def load_token(session_path):
+    if not os.path.exists(session_path):
+        return None
+    with open(session_path, encoding="utf-8") as f:
+        raw = f.read().strip()
+    if not raw:
+        return None
+    try:
+        data = json.loads(raw)
+        if isinstance(data, list):
+            for c in data:
+                if c.get("name") == "session_access_token":
+                    return c["value"]
+            return None
+        if isinstance(data, dict) and data.get("name") == "session_access_token":
+            return data["value"]
+        if isinstance(data, str):
+            return data
+    except json.JSONDecodeError:
+        return raw.strip()
+    return None
+
+
+def save_token(session_path, token):
+    with open(session_path, "w", encoding="utf-8") as f:
+        f.write(token)
+    print("[OK] Access token tersimpan")
+
+
+def apply_token(context, token):
+    context.add_cookies([{
+        "name": "session_access_token",
+        "value": token,
+        "domain": ".tiket.com",
+        "path": "/",
+        "httpOnly": True,
+        "secure": True,
+    }])
+
+
 def setup_session(context, config):
     mode = config.get("session_mode", "direct")
-    if mode == "paste":
-        session_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "session.json")
-
-        print("Paste session JSON (paste semua cookies dari Chrome DevTools, lalu Enter 2x):")
-        print("  Cara: DevTools > Application > Cookies > Copy cookies as JSON")
-        lines = []
-        while True:
-            line = input()
-            if not line:
-                break
-            lines.append(line)
-        raw = "\n".join(lines).strip()
-
-        if raw:
-            try:
-                cookies = json.loads(raw)
-                with open(session_path, "w", encoding="utf-8") as f:
-                    json.dump(cookies, f, indent=2)
-                context.add_cookies(cookies)
-                print(f"[OK] Session tersimpan & loaded ({len(cookies)} cookies)")
-                return
-            except Exception as e:
-                print(f"[ERROR] Gagal parse JSON: {e}")
-
-        if os.path.exists(session_path):
-            with open(session_path, encoding="utf-8") as f:
-                try:
-                    cookies = json.load(f)
-                    context.add_cookies(cookies)
-                    print("[OK] Session loaded dari session.json")
-                except Exception as e:
-                    print(f"[ERROR] Gagal load session.json: {e}")
-        else:
-            print("[!] Tidak ada session. Lanjut tanpa session.")
-    else:
+    if mode != "paste":
         print("[OK] Pakai Chrome session langsung.")
+        return
+
+    session_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "session.json")
+    token = None
+
+    try:
+        token_str = input("Paste session_access_token (Enter untuk pakai session.json): ").strip()
+    except (EOFError, KeyboardInterrupt):
+        token_str = ""
+
+    if token_str:
+        token = token_str
+        save_token(session_path, token)
+    else:
+        token = load_token(session_path)
+        if token:
+            print("[OK] Load access token dari session.json")
+
+    if token:
+        apply_token(context, token)
+        print(f"[OK] Session access token loaded ({token[:20]}...)")
+    else:
+        print("[!] Tidak ada session. Lanjut tanpa session.")
 
 
 def run(playwright: Playwright, config: dict) -> None:
