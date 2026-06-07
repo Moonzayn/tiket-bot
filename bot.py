@@ -28,24 +28,8 @@ def adjust_quantity(page, target_qty):
             time.sleep(0.3)
 
 
-def select_package(page, config):
-    url = config["url"]
-    pkg_cfg = config.get("packages", {})
-    detail = pkg_cfg.get("detail", 1)
-    qty = pkg_cfg.get("qty", 1)
-
-    base = url.rstrip("/").split("?")[0].split("#")[0]
-    pkgs_url = f"{base}/packages#pricetierDetail-{detail}"
-    page.goto(pkgs_url)
-    page.wait_for_timeout(10000)
-
-    # cek Cloudflare
-    if page.locator("text=challenge").count() > 0 or page.locator("text=Turnstile").count() > 0:
-        print("[!] Cloudflare challenge terdeteksi — tunggu penyelesaian manual 30dtk")
-        page.wait_for_timeout(30000)
-
-
-
+def try_book_package(page, detail, qty):
+    """Coba booking package dengan detail tertentu. Return True jika berhasil."""
     adjust_quantity(page, qty)
 
     pesan_btn = page.get_by_role("button", name=re.compile("Pesan|Book", re.I))
@@ -66,7 +50,38 @@ def select_package(page, config):
             print(f"[INFO] Berhasil Book pricetierDetail-{detail}")
             return True
 
-    print(f"[ERROR] Tombol Pesan tidak muncul")
+    return False
+
+
+def select_package(page, config):
+    url = config["url"]
+    pkg_cfg = config.get("packages", {})
+    start_detail = pkg_cfg.get("detail", 1)
+    qty = pkg_cfg.get("qty", 1)
+    base = url.rstrip("/").split("?")[0].split("#")[0]
+
+    for i in range(start_detail, start_detail + 10):
+        pkgs_url = f"{base}/packages#pricetierDetail-{i}"
+        print(f"[INFO] Coba pricetierDetail-{i}...")
+        try:
+            page.goto(pkgs_url, timeout=20000)
+        except Exception as e:
+            print(f"[DEBUG] Gagal load pricetierDetail-{i}: {e}")
+            continue
+
+        page.wait_for_timeout(8000)
+
+        # cek Cloudflare
+        if page.locator("text=challenge").count() > 0 or page.locator("text=Turnstile").count() > 0:
+            print("[!] Cloudflare challenge terdeteksi — tunggu penyelesaian manual 30dtk")
+            page.wait_for_timeout(30000)
+
+        if try_book_package(page, i, qty):
+            return True
+
+        print(f"[DEBUG] pricetierDetail-{i} tidak tersedia, lanjut...")
+
+    print(f"[ERROR] Semua pricetierDetail ({start_detail}-{start_detail + 9}) tidak tersedia")
     return False
 
 
