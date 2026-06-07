@@ -28,60 +28,46 @@ def adjust_quantity(page, target_qty):
             time.sleep(0.3)
 
 
-def try_book_package(page, detail, qty):
-    """Coba booking package dengan detail tertentu. Return True jika berhasil."""
-    adjust_quantity(page, qty)
-
-    pesan_btn = page.get_by_role("button", name=re.compile("Pesan|Book", re.I))
-    if pesan_btn.first.is_visible(timeout=5000) and pesan_btn.first.is_enabled():
-        pesan_btn.first.click()
-        print(f"[INFO] Berhasil Book pricetierDetail-{detail}")
-        return True
-
-    group = page.get_by_test_id(f"package-group-{detail - 1}")
-    group.scroll_into_view_if_needed(timeout=5000)
-    pilih_btn = group.get_by_role("button", name=re.compile("Pilih|Select", re.I))
-    if pilih_btn.first.is_visible(timeout=3000) and pilih_btn.first.is_enabled():
-        pilih_btn.first.click()
-        page.wait_for_timeout(1500)
-        adjust_quantity(page, qty)
-        if pesan_btn.first.is_visible(timeout=3000) and pesan_btn.first.is_enabled():
-            pesan_btn.first.click()
-            print(f"[INFO] Berhasil Book pricetierDetail-{detail}")
-            return True
-
-    return False
-
-
 def select_package(page, config):
     url = config["url"]
     pkg_cfg = config.get("packages", {})
-    start_detail = pkg_cfg.get("detail", 1)
     qty = pkg_cfg.get("qty", 1)
     base = url.rstrip("/").split("?")[0].split("#")[0]
 
-    for i in range(start_detail, start_detail + 10):
-        pkgs_url = f"{base}/packages#pricetierDetail-{i}"
-        print(f"[INFO] Coba pricetierDetail-{i}...")
+    if "list" in pkg_cfg:
+        packages_list = pkg_cfg["list"]
+    elif pkg_cfg.get("auto"):
+        packages_list = list(range(1, 11))
+    else:
+        start = pkg_cfg.get("detail", 1)
+        packages_list = list(range(start, start + 10))
+
+    for detail in packages_list:
+        pkgs_url = f"{base}/packages#pricetierDetail-{detail}"
+        print(f"[INFO] Coba pricetierDetail-{detail}...")
         try:
             page.goto(pkgs_url, timeout=20000)
         except Exception as e:
-            print(f"[DEBUG] Gagal load pricetierDetail-{i}: {e}")
+            print(f"[DEBUG] Gagal load: {e}")
             continue
 
         page.wait_for_timeout(8000)
 
-        # cek Cloudflare
         if page.locator("text=challenge").count() > 0 or page.locator("text=Turnstile").count() > 0:
-            print("[!] Cloudflare challenge terdeteksi — tunggu penyelesaian manual 30dtk")
+            print("[!] Cloudflare challenge — tunggu 30dtk")
             page.wait_for_timeout(30000)
 
-        if try_book_package(page, i, qty):
+        adjust_quantity(page, qty)
+
+        pesan_btn = page.get_by_role("button", name=re.compile("Pesan|Book", re.I))
+        if pesan_btn.first.is_visible(timeout=5000) and pesan_btn.first.is_enabled():
+            pesan_btn.first.click()
+            print(f"[INFO] Berhasil Book pricetierDetail-{detail}")
             return True
 
-        print(f"[DEBUG] pricetierDetail-{i} tidak tersedia, lanjut...")
+        print(f"[DEBUG] pricetierDetail-{detail} tidak tersedia")
 
-    print(f"[ERROR] Semua pricetierDetail ({start_detail}-{start_detail + 9}) tidak tersedia")
+    print(f"[ERROR] Semua package tidak tersedia")
     return False
 
 
